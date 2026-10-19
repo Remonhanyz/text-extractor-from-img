@@ -11,7 +11,7 @@ const server = http.createServer(async (req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OCR-Lang');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -76,7 +76,10 @@ const server = http.createServer(async (req, res) => {
   }
 
   // OCR Endpoint
-  if (req.url === '/ocr' && req.method === 'POST') {
+  if (req.url.startsWith('/ocr') && req.method === 'POST') {
+    const parsedUrl = new URL(req.url, 'http://127.0.0.1:' + PORT);
+    const lang = parsedUrl.searchParams.get('lang') || req.headers['x-ocr-lang'] || 'auto';
+
     const chunks = [];
     req.on('data', chunk => chunks.push(chunk));
     req.on('end', async () => {
@@ -88,19 +91,21 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const result = await ocrWorker.recognize(imageBuffer);
+        const result = await ocrWorker.recognize(imageBuffer, lang);
 
         // Auto-save non-empty extractions to history
         if (result.text && result.text.length > 0) {
           historyStore.addHistoryItem(result.text);
         }
 
-        console.log(`[OCR-Server] Recognized (${result.durationMs}ms): "${result.text.substring(0, 60)}${result.text.length > 60 ? '...' : ''}"`);
+        const preview = result.text.length > 60 ? result.text.substring(0, 60) + '...' : result.text;
+        console.log('[OCR-Server] Recognized [' + lang + '] (' + result.durationMs + 'ms, Conf: ' + result.confidence + '%): "' + preview.replace(/\n/g, ' ') + '"');
 
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
           text: result.text,
+          confidence: result.confidence,
           durationMs: result.durationMs
         }));
       } catch (err) {
@@ -119,8 +124,8 @@ const server = http.createServer(async (req, res) => {
 // Start worker and server
 ocrWorker.initWorker().then(() => {
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[OCR-Server] Server running on http://127.0.0.1:${PORT}`);
-    console.log(`[OCR-Server] History Web Dashboard: http://127.0.0.1:${PORT}/history`);
+    console.log('[OCR-Server] Server running on http://127.0.0.1:' + PORT);
+    console.log('[OCR-Server] History Web Dashboard: http://127.0.0.1:' + PORT + '/history');
   });
 }).catch(err => {
   console.error('[OCR-Server] Failed to initialize worker:', err);

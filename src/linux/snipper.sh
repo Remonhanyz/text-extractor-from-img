@@ -51,11 +51,28 @@ if [ ! -f "$TMP_IMG" ] || [ ! -s "$TMP_IMG" ]; then
     exit 0
 fi
 
-# 3. Post image to OCR service
-RESPONSE=$(curl -s -X POST --data-binary @"$TMP_IMG" -H "Content-Type: image/png" "http://127.0.0.1:${PORT}/ocr")
+# 3. High-Accuracy Image Preprocessing (if ImageMagick is available)
+if command -v magick >/dev/null 2>&1; then
+    magick "$TMP_IMG" -filter Lanczos -resize 220% -bordercolor white -border 24 -colorspace Gray "$TMP_IMG" 2>/dev/null || true
+elif command -v convert >/dev/null 2>&1; then
+    convert "$TMP_IMG" -filter Lanczos -resize 220% -bordercolor white -border 24 -colorspace Gray "$TMP_IMG" 2>/dev/null || true
+fi
+
+# 4. Read configured language mode (auto, ara, eng)
+LANG_MODE="auto"
+CONFIG_FILE="${ROOT_DIR}/data/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+    CONFIG_LANG=$(node -e "try { const c = JSON.parse(fs.readFileSync(process.argv[1], 'utf8')); if (c.ocrLanguage) console.log(c.ocrLanguage); } catch(e){}" "$CONFIG_FILE" 2>/dev/null || echo "")
+    if [ -n "$CONFIG_LANG" ]; then
+        LANG_MODE="$CONFIG_LANG"
+    fi
+fi
+
+# 5. Post image to OCR service
+RESPONSE=$(curl -s -X POST --data-binary @"$TMP_IMG" -H "Content-Type: image/png" -H "X-OCR-Lang: ${LANG_MODE}" "http://127.0.0.1:${PORT}/ocr?lang=${LANG_MODE}")
 rm -f "$TMP_IMG"
 
-# 4. Parse response text
+# 6. Parse response text
 if command -v jq >/dev/null 2>&1; then
     TEXT=$(echo "$RESPONSE" | jq -r '.text // empty')
 else
@@ -67,7 +84,7 @@ if [ -z "$TEXT" ]; then
     exit 0
 fi
 
-# 5. Copy text to Linux clipboard
+# 7. Copy text to Linux clipboard
 if [ -n "$WAYLAND_DISPLAY" ] && command -v wl-copy >/dev/null 2>&1; then
     printf "%s" "$TEXT" | wl-copy
 elif command -v xclip >/dev/null 2>&1; then
@@ -76,6 +93,6 @@ elif command -v xsel >/dev/null 2>&1; then
     printf "%s" "$TEXT" | xsel -b -i
 fi
 
-# 6. Show desktop notification
+# 8. Show desktop notification
 PREVIEW=$(echo "$TEXT" | head -n 2 | cut -c 1-80)
 notify-send "Text Copied (${#TEXT} chars)" "$PREVIEW"

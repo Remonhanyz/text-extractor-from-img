@@ -45,7 +45,7 @@ namespace ArabicTextExtractor
             trayMenu = new ContextMenuStrip();
             itemSnip = new ToolStripMenuItem(string.Format("Capture Text ({0})", cfg.Snip), null, (s, e) => StartSnipping());
             itemHistory = new ToolStripMenuItem(string.Format("Text History ({0})", cfg.History), null, (s, e) => OpenHistory());
-            itemSettings = new ToolStripMenuItem("Shortcut Settings...", null, (s, e) => OpenSettings());
+            itemSettings = new ToolStripMenuItem("Settings...", null, (s, e) => OpenSettings());
 
             trayMenu.Items.Add(itemSnip);
             trayMenu.Items.Add(itemHistory);
@@ -108,8 +108,8 @@ namespace ArabicTextExtractor
             itemHistory.Text = string.Format("Text History ({0})", cfg.History);
             trayIcon.Text = string.Format("Text Extractor ({0})", cfg.Snip);
 
-            trayIcon.ShowBalloonTip(2500, "Shortcuts Updated",
-                string.Format("Snip: {0}\nHistory: {1}", cfg.Snip, cfg.History),
+            trayIcon.ShowBalloonTip(2500, "Settings Updated",
+                string.Format("Snip: {0}\nHistory: {1}\nMode: {2}", cfg.Snip, cfg.History, cfg.OcrLanguage ?? "auto"),
                 ToolTipIcon.Info);
         }
 
@@ -118,19 +118,21 @@ namespace ArabicTextExtractor
             try
             {
                 Rectangle bounds = SystemInformation.VirtualScreen;
-                Bitmap screenBmp = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-                using (Graphics g = Graphics.FromImage(screenBmp))
+
+                Bitmap fullScreenshot = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
+                using (Graphics g = Graphics.FromImage(fullScreenshot))
                 {
-                    g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
+                    g.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
                 }
 
-                OverlayForm overlay = new OverlayForm(screenBmp, bounds, this);
+                OverlayForm overlay = new OverlayForm(fullScreenshot, bounds, this);
                 overlay.Show();
                 overlay.Activate();
             }
             catch (Exception ex)
             {
-                trayIcon.ShowBalloonTip(3000, "Error starting capture", ex.Message, ToolTipIcon.Error);
+                MessageBox.Show("Error initiating snipping tool: " + ex.Message, "Capture Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -170,17 +172,26 @@ namespace ArabicTextExtractor
                 {
                     EnsureNodeServiceRunning();
 
+                    // Apply high-accuracy preprocessing
+                    Bitmap enhanced = ImagePreprocessor.Preprocess(cropped);
+                    cropped.Dispose();
+
                     using (MemoryStream ms = new MemoryStream())
                     {
-                        cropped.Save(ms, ImageFormat.Png);
+                        enhanced.Save(ms, ImageFormat.Png);
                         byte[] imgBytes = ms.ToArray();
-                        cropped.Dispose();
+                        enhanced.Dispose();
 
-                        HttpWebRequest request = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + OCR_PORT + "/ocr");
+                        AppConfig cfg = ConfigManager.GetConfig();
+                        string lang = (cfg != null && !string.IsNullOrEmpty(cfg.OcrLanguage)) ? cfg.OcrLanguage : "auto";
+
+                        string url = "http://127.0.0.1:" + OCR_PORT + "/ocr?lang=" + Uri.EscapeDataString(lang);
+                        HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
                         request.Method = "POST";
                         request.ContentType = "image/png";
+                        request.Headers["X-OCR-Lang"] = lang;
                         request.ContentLength = imgBytes.Length;
-                        request.Timeout = 15000;
+                        request.Timeout = 20000;
 
                         using (Stream reqStream = request.GetRequestStream())
                         {

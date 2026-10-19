@@ -90,6 +90,7 @@ namespace ArabicTextExtractor
     {
         public HotkeyConfig Snip = new HotkeyConfig(true, false, true, false, Keys.A); // Alt+Shift+A
         public HotkeyConfig History = new HotkeyConfig(true, false, true, false, Keys.H); // Alt+Shift+H
+        public string OcrLanguage = "auto"; // "auto", "ara", "eng"
     }
 
     public static class ConfigManager
@@ -137,6 +138,7 @@ namespace ArabicTextExtractor
                 string json = File.ReadAllText(FilePath, Encoding.UTF8);
                 string snipStr = ExtractField(json, "snipShortcut");
                 string histStr = ExtractField(json, "historyShortcut");
+                string langStr = ExtractField(json, "ocrLanguage");
 
                 if (!string.IsNullOrEmpty(snipStr))
                 {
@@ -145,6 +147,10 @@ namespace ArabicTextExtractor
                 if (!string.IsNullOrEmpty(histStr))
                 {
                     cfg.History = HotkeyConfig.Parse(histStr, cfg.History);
+                }
+                if (!string.IsNullOrEmpty(langStr))
+                {
+                    cfg.OcrLanguage = langStr;
                 }
             }
             catch { }
@@ -164,7 +170,8 @@ namespace ArabicTextExtractor
                     StringBuilder sb = new StringBuilder();
                     sb.Append("{\n");
                     sb.AppendFormat("  \"snipShortcut\": \"{0}\",\n", cfg.Snip.ToString());
-                    sb.AppendFormat("  \"historyShortcut\": \"{0}\"\n", cfg.History.ToString());
+                    sb.AppendFormat("  \"historyShortcut\": \"{0}\",\n", cfg.History.ToString());
+                    sb.AppendFormat("  \"ocrLanguage\": \"{0}\"\n", cfg.OcrLanguage ?? "auto");
                     sb.Append("}\n");
 
                     File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);

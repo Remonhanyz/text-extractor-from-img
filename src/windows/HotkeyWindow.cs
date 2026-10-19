@@ -11,9 +11,6 @@ namespace ArabicTextExtractor
         private const int HOTKEY_SNIP_ID = 9001;
         private const int HOTKEY_HIST_ID = 9002;
 
-        private const int MOD_ALT = 0x0001;
-        private const int MOD_SHIFT = 0x0004;
-
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, int fsModifiers, int vk);
 
@@ -24,10 +21,17 @@ namespace ArabicTextExtractor
         {
             context = ctx;
             CreateHandle(new CreateParams());
-            // Alt + Shift + A (Snip)
-            RegisterHotKey(this.Handle, HOTKEY_SNIP_ID, MOD_ALT | MOD_SHIFT, (int)Keys.A);
-            // Alt + Shift + H (History)
-            RegisterHotKey(this.Handle, HOTKEY_HIST_ID, MOD_ALT | MOD_SHIFT, (int)Keys.H);
+            RegisterCurrentHotkeys();
+        }
+
+        public void RegisterCurrentHotkeys()
+        {
+            UnregisterHotKey(this.Handle, HOTKEY_SNIP_ID);
+            UnregisterHotKey(this.Handle, HOTKEY_HIST_ID);
+
+            AppConfig cfg = ConfigManager.GetConfig();
+            RegisterHotKey(this.Handle, HOTKEY_SNIP_ID, cfg.Snip.GetModifiers(), (int)cfg.Snip.Key);
+            RegisterHotKey(this.Handle, HOTKEY_HIST_ID, cfg.History.GetModifiers(), (int)cfg.History.Key);
         }
 
         protected override void WndProc(ref Message m)

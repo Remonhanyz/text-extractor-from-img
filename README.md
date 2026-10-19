@@ -8,25 +8,30 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 
 - ⚡ **Ultra-Fast Local OCR**: Uses a pre-warmed neural engine (`tesseract.js` with `ara` + `eng`) delivering recognition in **30–70 ms**.
 - 📴 **100% Offline**: Neural models (`ara.traineddata` & `eng.traineddata`) are stored locally. Zero cloud dependency, zero telemetry, total privacy.
-- 🎯 **PowerToys-Style Screen Snip**: Press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> to dim your monitors, drag a selection box around any text, and instantly copy it to your clipboard.
+- 🎯 **PowerToys-Style Screen Snip**: Dim your monitors, drag a selection box around any text, and instantly copy it to your clipboard.
+- ⌨️ **Reassignable Shortcuts**: Fully customizable keyboard shortcuts! Rebind via the **Shortcut Settings** GUI or `data/config.json`.
 - 📜 **Searchable Text History**:
-  - **Windows**: Native desktop History Window (<kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd>).
+  - **Windows**: Native desktop History Window.
   - **Linux / Web**: Modern dark dashboard at `http://localhost:48821/history` (or run `./src/linux/history.sh`).
 - 🚀 **Auto-Start on Boot**:
   - **Windows**: Right-click tray icon &rarr; `[✓] Start with Windows`.
   - **Linux**: Auto-installed systemd user service (`systemctl --user enable arabic-ocr`).
 - 🎨 **Custom App Icon**: Clean custom app icon embedded into the executable, desktop shortcut, and system tray.
-- 🐧 **1-Step Linux Setup**: Automated installer (`./install.sh`) that installs dependencies and binds GNOME shortcuts automatically.
+- 🐧 **1-Step Linux Setup**: Automated installer (`./install.sh`) that installs dependencies and binds shortcuts automatically.
 
 ---
 
-## ⌨️ Shortcuts
+## ⌨️ Shortcuts (Fully Customizable)
 
-| Shortcut | Action | Windows | Linux |
-|---|---|---|---|
-| <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> | Snip screen and extract text to clipboard | Supported (Global Hotkey) | Supported (via `snipper.sh`) |
-| <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | Open Text Extraction History | Supported (Desktop Window) | Supported (via `history.sh`) |
-| <kbd>Esc</kbd> | Cancel active snipping overlay | Supported | Supported |
+| Action | Default Shortcut | Customization |
+|---|---|---|
+| **Snip Screen & Extract Text** | <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> | Tray Icon &rarr; **Shortcut Settings...** or edit `data/config.json` |
+| **Open Text History Window** | <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> | Tray Icon &rarr; **Shortcut Settings...** or edit `data/config.json` |
+| **Cancel Selection / Close Dialog** | <kbd>Esc</kbd> | Fixed standard key |
+
+### How to Change Shortcuts:
+- **On Windows**: Right-click the System Tray icon &rarr; select **Shortcut Settings...** &rarr; click inside any shortcut box and press your preferred combination (e.g., <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd>) &rarr; click **Save & Apply** (instant hotkey re-registration, no restart needed!).
+- **On Linux**: Edit `data/config.json` and run `./install.sh`.
 
 ---
 
@@ -58,9 +63,9 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 3. That's it! The script automatically:
    - Detects your package manager (`apt`, `dnf`, `pacman`) and installs capture utilities (`grim`, `slurp`, `wl-clipboard`, `maim`, `xclip`).
    - Runs `npm install`.
-   - Automatically registers <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> and <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> in GNOME.
+   - Automatically registers your configured shortcuts in GNOME.
    - Activates the background daemon via `systemd`.
-   - You can immediately press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd>!
+   - You can immediately press your shortcut to snip!
 
 ---
 
@@ -71,9 +76,11 @@ text-extractor-from-img/
 ├── src/
 │   ├── windows/                          # Windows Native C# Application
 │   │   ├── Program.cs                    # Entry point & ApplicationContext
+│   │   ├── SettingsForm.cs               # Interactive shortcut reassign dialog
+│   │   ├── ConfigManager.cs              # Hotkey parsing & config.json manager
 │   │   ├── OverlayForm.cs                # Fullscreen snipping & marquee selection UI
 │   │   ├── HistoryForm.cs                # Desktop text extraction history UI
-│   │   ├── HotkeyWindow.cs               # Win32 global hotkey registration
+│   │   ├── HotkeyWindow.cs               # Dynamic Win32 global hotkey registration
 │   │   ├── HistoryManager.cs             # Local history read/write logic
 │   │   ├── StartupManager.cs             # Registry startup toggle helper
 │   │   └── build.bat                     # Build script to compile ArabicSnipper.exe
@@ -99,7 +106,8 @@ text-extractor-from-img/
 │   ├── app.ico                           # Multi-resolution Windows icon
 │   └── icon.jpg                          # Master app graphic
 │
-├── data/                                 # User data & persistent state
+├── data/                                 # User data & persistent configuration
+│   ├── config.json                       # Reassignable shortcut settings
 │   └── history.json                      # Persistent snippet history
 │
 ├── bin/                                  # Compiled Windows Binaries

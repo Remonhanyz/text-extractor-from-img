@@ -26,19 +26,30 @@ namespace ArabicTextExtractor
     {
         private NotifyIcon trayIcon;
         private ContextMenuStrip trayMenu;
+        private ToolStripMenuItem itemSnip;
+        private ToolStripMenuItem itemHistory;
+        private ToolStripMenuItem itemSettings;
         private ToolStripMenuItem startupMenuItem;
         private HotkeyWindow hotkeyWindow;
         private Process nodeProcess;
         private HistoryForm openHistoryForm;
+        private SettingsForm openSettingsForm;
         private const int OCR_PORT = 48821;
 
         public SnipperContext()
         {
             EnsureNodeServiceRunning();
 
+            AppConfig cfg = ConfigManager.GetConfig();
+
             trayMenu = new ContextMenuStrip();
-            trayMenu.Items.Add("Capture Text (Alt+Shift+A)", null, (s, e) => StartSnipping());
-            trayMenu.Items.Add("Text History (Alt+Shift+H)", null, (s, e) => OpenHistory());
+            itemSnip = new ToolStripMenuItem(string.Format("Capture Text ({0})", cfg.Snip), null, (s, e) => StartSnipping());
+            itemHistory = new ToolStripMenuItem(string.Format("Text History ({0})", cfg.History), null, (s, e) => OpenHistory());
+            itemSettings = new ToolStripMenuItem("Shortcut Settings...", null, (s, e) => OpenSettings());
+
+            trayMenu.Items.Add(itemSnip);
+            trayMenu.Items.Add(itemHistory);
+            trayMenu.Items.Add(itemSettings);
             trayMenu.Items.Add("-");
 
             startupMenuItem = new ToolStripMenuItem("Start with Windows");
@@ -60,19 +71,13 @@ namespace ArabicTextExtractor
             trayMenu.Items.Add("Exit", null, (s, e) => Exit());
 
             trayIcon = new NotifyIcon();
-            trayIcon.Text = "Arabic & English Text Extractor";
+            trayIcon.Text = string.Format("Text Extractor ({0})", cfg.Snip);
 
             // Load app icon
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             string icoPath = Path.Combine(baseDir, "assets", "app.ico");
-            if (!File.Exists(icoPath))
-            {
-                icoPath = Path.Combine(baseDir, "..", "assets", "app.ico");
-            }
-            if (!File.Exists(icoPath))
-            {
-                icoPath = Path.Combine(baseDir, "app.ico");
-            }
+            if (!File.Exists(icoPath)) icoPath = Path.Combine(baseDir, "..", "assets", "app.ico");
+            if (!File.Exists(icoPath)) icoPath = Path.Combine(baseDir, "app.ico");
 
             if (File.Exists(icoPath))
             {
@@ -91,7 +96,20 @@ namespace ArabicTextExtractor
             hotkeyWindow = new HotkeyWindow(this);
 
             trayIcon.ShowBalloonTip(3000, "Screen Text Extractor Ready",
-                "Alt+Shift+A: Snip screen to copy text\nAlt+Shift+H: Open text history",
+                string.Format("{0}: Snip screen to copy text\n{1}: Open text history", cfg.Snip, cfg.History),
+                ToolTipIcon.Info);
+        }
+
+        public void ApplyUpdatedShortcuts()
+        {
+            hotkeyWindow.RegisterCurrentHotkeys();
+            AppConfig cfg = ConfigManager.GetConfig();
+            itemSnip.Text = string.Format("Capture Text ({0})", cfg.Snip);
+            itemHistory.Text = string.Format("Text History ({0})", cfg.History);
+            trayIcon.Text = string.Format("Text Extractor ({0})", cfg.Snip);
+
+            trayIcon.ShowBalloonTip(2500, "Shortcuts Updated",
+                string.Format("Snip: {0}\nHistory: {1}", cfg.Snip, cfg.History),
                 ToolTipIcon.Info);
         }
 
@@ -128,6 +146,20 @@ namespace ArabicTextExtractor
             openHistoryForm = new HistoryForm(this);
             openHistoryForm.Show();
             openHistoryForm.Activate();
+        }
+
+        public void OpenSettings()
+        {
+            if (openSettingsForm != null && !openSettingsForm.IsDisposed)
+            {
+                openSettingsForm.BringToFront();
+                openSettingsForm.Activate();
+                return;
+            }
+
+            openSettingsForm = new SettingsForm(this);
+            openSettingsForm.Show();
+            openSettingsForm.Activate();
         }
 
         public void ProcessImage(Bitmap cropped)

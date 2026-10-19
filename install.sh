@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Arabic & English Screen OCR Extractor - 1-Step Linux Installer
-# Automates package installation, GNOME shortcuts, and service activation
+# Automates package installation, reassignable GNOME shortcuts, and service activation
 # ==============================================================================
 
 set -e
@@ -9,10 +9,44 @@ set -e
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SNIPPER_SCRIPT="${ROOT_DIR}/src/linux/snipper.sh"
 HISTORY_SCRIPT="${ROOT_DIR}/src/linux/history.sh"
+CONFIG_FILE="${ROOT_DIR}/data/config.json"
 
 echo "================================================================="
 echo "   Arabic & English Screen Text Extractor - Linux Setup          "
 echo "================================================================="
+
+# Helper to convert shortcut like "Alt+Shift+A" to GNOME "<Alt><Shift>a"
+format_gnome_shortcut() {
+    local raw="$1"
+    local result=""
+    IFS='+' read -ra PARTS <<< "$raw"
+    for part in "${PARTS[@]}"; do
+        part="$(echo "$part" | xargs)"
+        case "$part" in
+            Alt)   result="${result}<Alt>" ;;
+            Ctrl|Control) result="${result}<Control>" ;;
+            Shift) result="${result}<Shift>" ;;
+            Win|Super)    result="${result}<Super>" ;;
+            *)     result="${result}$(echo "$part" | tr '[:upper:]' '[:lower:]')" ;;
+        esac
+    done
+    echo "$result"
+}
+
+# Read configured shortcuts from data/config.json if available
+SNIP_RAW="Alt+Shift+A"
+HIST_RAW="Alt+Shift+H"
+
+if [ -f "$CONFIG_FILE" ] && command -v jq >/dev/null 2>&1; then
+    SNIP_RAW=$(jq -r '.snipShortcut // "Alt+Shift+A"' "$CONFIG_FILE")
+    HIST_RAW=$(jq -r '.historyShortcut // "Alt+Shift+H"' "$CONFIG_FILE")
+elif [ -f "$CONFIG_FILE" ] && command -v node >/dev/null 2>&1; then
+    SNIP_RAW=$(node -e "try{console.log(require('$CONFIG_FILE').snipShortcut || 'Alt+Shift+A')}catch(e){console.log('Alt+Shift+A')}")
+    HIST_RAW=$(node -e "try{console.log(require('$CONFIG_FILE').historyShortcut || 'Alt+Shift+H')}catch(e){console.log('Alt+Shift+H')}")
+fi
+
+GNOME_SNIP=$(format_gnome_shortcut "$SNIP_RAW")
+GNOME_HIST=$(format_gnome_shortcut "$HIST_RAW")
 
 # 1. Auto-detect & install package dependencies
 echo "[1/4] Checking system package dependencies..."
@@ -54,32 +88,29 @@ echo "[3/4] Installing Node dependencies..."
 if command -v npm >/dev/null 2>&1; then
     (cd "${ROOT_DIR}" && npm install --silent)
     echo "[✓] Node dependencies ready."
-else
-    echo "[!] Node.js / npm not found. Please install Node.js (v18+)."
 fi
 
 # 4. Auto-bind Keyboard Shortcuts in GNOME via gsettings
-echo "[4/4] Configuring keyboard shortcuts..."
+echo "[4/4] Configuring keyboard shortcuts (${SNIP_RAW} & ${HIST_RAW})..."
 if command -v gsettings >/dev/null 2>&1; then
     SCHEMA="org.gnome.settings-daemon.plugins.media-keys"
     KB_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 
-    # Add custom bindings
     gsettings set ${SCHEMA} custom-keybindings "['${KB_PATH}/arabic-ocr-snip/', '${KB_PATH}/arabic-ocr-hist/']"
     
-    # 1. Alt + Shift + A (Snip)
+    # Snip Shortcut
     gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-snip/ name 'Screen OCR Extractor'
     gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-snip/ command "${SNIPPER_SCRIPT}"
-    gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-snip/ binding '<Alt><Shift>a'
+    gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-snip/ binding "${GNOME_SNIP}"
 
-    # 2. Alt + Shift + H (History)
+    # History Shortcut
     gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-hist/ name 'Screen OCR History'
     gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-hist/ command "${HISTORY_SCRIPT}"
-    gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-hist/ binding '<Alt><Shift>h'
+    gsettings set ${SCHEMA}.custom-keybinding:${KB_PATH}/arabic-ocr-hist/ binding "${GNOME_HIST}"
 
-    echo "[✓] Keyboard shortcuts bound in GNOME:"
-    echo "    - Alt + Shift + A : Snip screen & extract text"
-    echo "    - Alt + Shift + H : Open Text History"
+    echo "[✓] Shortcuts registered in GNOME:"
+    echo "    - ${SNIP_RAW} : Snip screen & extract text"
+    echo "    - ${HIST_RAW} : Open Text History"
 fi
 
 # 5. Systemd User Service (Background Daemon)
@@ -105,11 +136,11 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl --user daemon-reload
     systemctl --user enable arabic-ocr.service
     systemctl --user restart arabic-ocr.service
-    echo "[✓] Background service enabled & started via systemd."
+    echo "[✓] Background service active via systemd."
 fi
 
 echo ""
 echo "================================================================="
-echo " 🎉 Installation Complete! Everything is ready."
-echo " Press Alt + Shift + A anywhere on screen to snip & extract text!"
+echo " 🎉 Installation Complete!"
+echo " Press ${SNIP_RAW} anywhere on screen to snip & extract text!"
 echo "================================================================="

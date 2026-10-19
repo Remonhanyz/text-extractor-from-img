@@ -11,12 +11,12 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 - 🎯 **PowerToys-Style Screen Snip**: Press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> to dim your monitors, drag a selection box around any text, and instantly copy it to your clipboard.
 - 📜 **Searchable Text History**:
   - **Windows**: Native desktop History Window (<kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd>).
-  - **Linux / Cross-Platform**: Web Dashboard at `http://localhost:48821/history` or run `./history.sh`.
-- 🚀 **Start with Windows & Linux Toggle**:
+  - **Linux / Web**: Modern dark dashboard at `http://localhost:48821/history` (or run `./src/linux/history.sh`).
+- 🚀 **Auto-Start on Boot**:
   - **Windows**: Right-click tray icon &rarr; `[✓] Start with Windows`.
   - **Linux**: Auto-installed systemd user service (`systemctl --user enable arabic-ocr`).
 - 🎨 **Custom App Icon**: Clean custom app icon embedded into the executable, desktop shortcut, and system tray.
-- 🐧 **Cross-Platform**: Full native support for Windows 10/11 and Linux (Wayland & X11).
+- 🐧 **1-Step Linux Setup**: Automated installer (`./install.sh`) that installs dependencies and binds GNOME shortcuts automatically.
 
 ---
 
@@ -36,62 +36,81 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 1. Clone the repository:
    ```bash
    git clone https://github.com/Remonhanyz/text-extractor-from-img.git
-   cd arabic-text-extractor
+   cd text-extractor-from-img
    ```
-2. Run `start.bat` or double-click `run.vbs`.
+2. Double-click `start.bat` or `run.vbs`.
 3. Press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> anywhere on screen!
 
 ---
 
-### 🐧 Linux Setup
+### 🐧 Linux Setup (1-Step Automated)
 
-#### 1. System Requirements:
-- **Node.js** (v18+)
-- Capture & Clipboard utilities:
-  - **On Wayland** (Ubuntu 22.04+, Fedora, GNOME 40+):
-    ```bash
-    sudo apt install grim slurp wl-clipboard curl
-    # Or on Arch: sudo pacman -S grim slurp wl-clipboard curl
-    ```
-  - **On X11** (XFCE, KDE X11, i3):
-    ```bash
-    sudo apt install maim xclip curl
-    # Or on Arch: sudo pacman -S maim xclip curl
-    ```
-
-#### 2. Run the 1-Step Linux Installer:
-```bash
-git clone https://github.com/Remonhanyz/text-extractor-from-img.git
-cd arabic-text-extractor
-chmod +x install-linux.sh
-./install-linux.sh
-```
-
-#### 3. Bind Keyboard Shortcut on Linux:
-- **GNOME (Ubuntu / Fedora)**:
-  1. Open **Settings &rarr; Keyboard &rarr; View and Customize Shortcuts &rarr; Custom Shortcuts &rarr; Add (+)**.
-  2. Set Name: `Screen Text OCR`
-  3. Set Command: `/path/to/arabic-text-extractor/snipper.sh`
-  4. Set Shortcut: <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd>
-- **KDE Plasma**:
-  - System Settings &rarr; Shortcuts &rarr; Custom Shortcuts &rarr; Edit &rarr; New &rarr; Global Shortcut &rarr; Command/URL.
-- **Hyprland / Sway / i3**:
-  ```ini
-  # Sway / Hyprland config:
-  bindsym Mod1+Shift+a exec /path/to/arabic-text-extractor/snipper.sh
-  bindsym Mod1+Shift+h exec /path/to/arabic-text-extractor/history.sh
-  ```
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/Remonhanyz/text-extractor-from-img.git
+   cd text-extractor-from-img
+   ```
+2. Run the automated installer:
+   ```bash
+   chmod +x install.sh
+   ./install.sh
+   ```
+3. That's it! The script automatically:
+   - Detects your package manager (`apt`, `dnf`, `pacman`) and installs capture utilities (`grim`, `slurp`, `wl-clipboard`, `maim`, `xclip`).
+   - Runs `npm install`.
+   - Automatically registers <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> and <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>H</kbd> in GNOME.
+   - Activates the background daemon via `systemd`.
+   - You can immediately press <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd>!
 
 ---
 
-## 🛠️ Project Structure
+## 📂 Project Architecture
 
-- `ArabicSnipper.exe` - Windows native C# overlay snipper application.
-- `snipper.sh` - Linux native Wayland (`grim` + `slurp`) & X11 (`maim`/`scrot`) snipper.
-- `ocr-service.js` - Background local Node.js service running offline Tesseract worker + Web History GUI.
-- `history.sh` - Linux launcher to open History Web UI.
-- `install-linux.sh` - Automated Linux installer (systemd service + desktop entry).
-- `run.vbs` - Silent background runner for Windows.
-- `ara.traineddata` & `eng.traineddata` - Offline neural network language models.
-- `history.json` - Persistent storage for extracted snippets.
-- `app.ico` - Multi-resolution application icon.
+```
+text-extractor-from-img/
+├── src/
+│   ├── windows/                          # Windows Native C# Application
+│   │   ├── Program.cs                    # Entry point & ApplicationContext
+│   │   ├── OverlayForm.cs                # Fullscreen snipping & marquee selection UI
+│   │   ├── HistoryForm.cs                # Desktop text extraction history UI
+│   │   ├── HotkeyWindow.cs               # Win32 global hotkey registration
+│   │   ├── HistoryManager.cs             # Local history read/write logic
+│   │   ├── StartupManager.cs             # Registry startup toggle helper
+│   │   └── build.bat                     # Build script to compile ArabicSnipper.exe
+│   │
+│   ├── linux/                            # Linux Native Shell Scripts
+│   │   ├── snipper.sh                    # Wayland (grim+slurp) & X11 (maim) capture
+│   │   └── history.sh                    # Web history browser launcher
+│   │
+│   ├── server/                           # Backend OCR Service (Node.js)
+│   │   ├── server.js                     # HTTP API router
+│   │   ├── ocr-worker.js                 # Tesseract.js worker initialization & recognition
+│   │   ├── history-store.js              # History JSON storage module
+│   │   └── web/                          # History Web Dashboard
+│   │       ├── index.html                # Clean web GUI template
+│   │       ├── style.css                 # Dark-mode styling
+│   │       └── app.js                    # Client-side interactions & search
+│   │
+│   └── models/                           # Offline Tesseract Neural Models
+│       ├── ara.traineddata               # Arabic LSTM model
+│       └── eng.traineddata               # English LSTM model
+│
+├── assets/                               # Visual assets
+│   ├── app.ico                           # Multi-resolution Windows icon
+│   └── icon.jpg                          # Master app graphic
+│
+├── data/                                 # User data & persistent state
+│   └── history.json                      # Persistent snippet history
+│
+├── bin/                                  # Compiled Windows Binaries
+│   └── ArabicSnipper.exe                 # Native executable
+│
+├── install.sh                            # 1-Command Linux Auto-Installer
+├── start.bat                             # Windows 1-click launcher
+├── stop.bat                              # Windows 1-click stop script
+├── run.vbs                               # Windows silent background runner
+├── package.json                          # Node project manifest
+├── package-lock.json
+├── README.md                             # Documentation
+└── .gitignore
+```

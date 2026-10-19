@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screen OCR Extractor - Text History</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>🔍 Screen Text Extractor</h1>
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="Search Arabic & English snippets...">
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="fetchHistory()">↻ Refresh</button>
+      <button class="btn btn-danger" onclick="clearHistory()">Clear All</button>
+    </div>
+  </header>
+  <main>
+    <div class="list-pane" id="listPane"></div>
+    <div class="detail-pane">
+      <div class="detail-meta">
+        <span id="detailTimestamp">Select a snippet from the list</span>
+        <div class="detail-actions">
+          <button class="btn btn-primary" onclick="copyDetail()">Copy to Clipboard</button>
+          <button class="btn btn-danger" onclick="deleteDetail()">Delete</button>
+        </div>
+      </div>
+      <textarea id="detailText" class="detail-text" placeholder="Snippet content will appear here..."></textarea>
+    </div>
+  </main>
+  <div id="toast" class="toast">Copied to clipboard!</div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

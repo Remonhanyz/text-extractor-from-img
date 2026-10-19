@@ -35,7 +35,7 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 ### 🪟 Windows Setup
 1. Clone the repository:
    ```bash
-   git clone https://github.com/Remonhanyz/arabic-text-extractor.git
+   git clone https://github.com/Remonhanyz/text-extractor-from-img.git
    cd arabic-text-extractor
    ```
 2. Run `start.bat` or double-click `run.vbs`.
@@ -61,7 +61,7 @@ A lightweight, high-performance screen text extractor and OCR tool for **Windows
 
 #### 2. Run the 1-Step Linux Installer:
 ```bash
-git clone https://github.com/Remonhanyz/arabic-text-extractor.git
+git clone https://github.com/Remonhanyz/text-extractor-from-img.git
 cd arabic-text-extractor
 chmod +x install-linux.sh
 ./install-linux.sh

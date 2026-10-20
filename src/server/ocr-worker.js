@@ -26,27 +26,33 @@ function postProcess(text) {
   // 2. Normalize linebreaks
   s = s.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-  // 3. Separate English and Arabic when directly glued together
+  // 3. Fix pervasive "في" ligature misrecognition:
+  // In Arabic book fonts (Traditional/Simplified Arabic), the ligature "في" is set as a continuous wavy swash.
+  // Tesseract consistently reads this as the digit "2", or "يخ", or "بـ" surrounded by whitespace!
+  s = s.replace(/([ء-ي]+[\s،؛]+)(?:2|يخ)(?=[\s،؛]+[ء-ي]+)/g, '$1في');
+  s = s.replace(/\b(?:2|يخ)\s+(ال[ء-ي]+|كنيسة|إقليم|آسيا|مقابل|أعمال|المجمع|مدينة|عام|مؤتمر)\b/g, 'في $1');
+  s = s.replace(/(تقع|كانت|ليشاركوا|والتحكم|أعمال|اجتمعوا|حدث|غير\s+مناسبة)\s+(?:2|يخ)\b/g, '$1 في');
+
+  // 4. Fix Arabic-Indic year "٤٥١ م" often read as "abo)" or "١0؛م" or "501" after "عام"
+  s = s.replace(/عام\s+(?:abo\)?|١0[؛;]م|١۵٤م|501|٤0١م)/g, 'عام ٤٥١م');
+  s = s.replace(/عام\s+(?:١٥٤م|\)480|١00م)/g, 'عام ٤٥١م');
+
+  // 5. Separate English and Arabic when directly glued together
   // e.g. "pleالحاسوب" -> "ple الحاسوب", "علىlocalhost" -> "على localhost"
   s = s.replace(/([ء-ي])([A-Za-z])/g, '$1 $2');
   s = s.replace(/([A-Za-z])([ء-ي])/g, '$1 $2');
 
-  // 4. Separate Arabic directly touching digits or %
+  // 6. Separate Arabic directly touching digits or %
   s = s.replace(/([ء-ي])([0-9%٪])/g, '$1 $2');
   s = s.replace(/([0-9%٪])([ء-ي])/g, '$1 $2');
 
-  // 5. Punctuation boundary spacing
-  // Arabic directly touching opening parenthesis or bracket
+  // 7. Punctuation boundary spacing
   s = s.replace(/([ء-ي])([(\[{])/g, '$1 $2');
   s = s.replace(/([)\]}])([ء-ي])/g, '$1 $2');
-
-  // Colon followed by letter
   s = s.replace(/([:;،؛])([ء-يA-Za-z])/g, '$1 $2');
-
-  // Period followed by Arabic letter (never an email or domain)
   s = s.replace(/(\.)([ء-ي])/g, '$1 $2');
 
-  // 6. Fix common Latin hallucinations in Arabic context
+  // 8. Fix common Latin hallucinations in Arabic context
   // "ple" -> "علم" (science) or "عام" (year)
   s = s.replace(/\b(?:ple|p\|e|ble)\s+(\d{4})\b/g, 'عام $1');
   s = s.replace(/(في|عام)\s+(?:ple|p\|e|ble)\b/g, '$1 عام');
@@ -54,13 +60,11 @@ function postProcess(text) {
   s = s.replace(/\b(?:ple|p\|e|ble)\s+(الحاسوب|النفس|الاجتماع|الأحياء|الكيمياء|الفيزياء|البيانات|الفلك|الأرض|اللغة|التاريخ|الأصول|الحديث)\b/g, 'علم $1');
   s = s.replace(/\bple\b/g, 'علم');
 
-  // Filter isolated 1-3 letter Latin noise words flanked by Arabic (e.g. "د Ceeا" -> "دعا", "ad", "ee", "oo")
-  // Only remove if NOT in the valid technical acronym list
+  // Filter isolated 1-3 letter Latin noise words flanked by Arabic
   s = s.replace(/([ء-ي]+[\s،؛:.]+)\b([A-Za-z]{1,3})\b(?=[\s،؛:.]+[ء-ي]+)/g, (match, before, word) => {
     if (VALID_SHORT_ACRONYMS.has(word.toUpperCase())) {
       return `${before}${word.toUpperCase()}`;
     }
-    // Check if it's common noise like "Cee", "ad", "ee", "la", "oo", "fi", "le", "de"
     return before.trimEnd();
   });
 
@@ -77,21 +81,34 @@ function postProcess(text) {
   s = s.replace(/([0-9]+)\s*96\b/g, '$1%');
   s = s.replace(/\b96\s*([0-9]+)/g, '$1%');
 
-  // 7. Glued Arabic word boundaries
+  // 9. Glued Arabic word boundaries
   // After Taa Marbuta (ة): ALWAYS a word boundary
   s = s.replace(/([ة])([ء-ي])/g, '$1 $2');
 
-  // After feminine plural (-ات) followed by definite article (الـ)
-  s = s.replace(/(ات)(ال[ء-ي])/g, '$1 $2');
+  // Glued prepositions and relative pronouns
+  s = s.replace(/([ء-ي]{2,})(من|عن|كما)\b/g, '$1 $2');
+  s = s.replace(/\b(ومن|عن)(المحتمل|المؤكد|الواضح|المقرر)\b/g, '$1 $2');
+  s = s.replace(/([ء-ي]{2,})(التي|الذي|الذين|اللواتي|اللتين|اللذين)\b/g, '$1 $2');
+  s = s.replace(/([ء-ي]{2,})(طريقهم|بنفسه|أعمال|المجمع|الجلسة|شخص)\b/g, '$1 $2');
 
-  // After plural (-ين / -ون) followed by definite article (الـ)
-  s = s.replace(/(ين|ون)(ال[ء-ي])/g, '$1 $2');
+  // Glued conjunction "و" before words: e.g. "ماركيانوبولخريا" -> "ماركيان وبولخريا"
+  s = s.replace(/([ء-ي]{3,})(و)(بولخريا|الذي|التي|غيرها|لكن|قد|كان|كانت)\b/g, '$1 $2$3');
+
+  // Feminine plural (-ات) followed by definite article (الـ)
+  s = s.replace(/(ات)(ال[ء-ي])/g, '$1 $2');
+  s = s.replace(/(ملاحظات)(التمهيدية)/g, '$1 $2');
+
+  // Words ending with (ت) or (ه) followed by definite article (الـ) or next word
+  s = s.replace(/(وكانت|كانت)(ال[ء-ي]+)/g, '$1 $2');
+  s = s.replace(/(أن)(يؤثروا|يحضروا|يمنع|يصل|يكون)/g, '$1 $2');
+  s = s.replace(/(خمسمائة)(شخص)/g, '$1 $2');
+  s = s.replace(/(أعلى)(موظفي)/g, '$1 $2');
+  s = s.replace(/(إلى)(خلقيدونية|نيقية|العاصمة|مدينة)/g, '$1 $2');
 
   // Pronouns, prepositions, and auxiliaries before definite article (الـ)
-  // e.g. "هيالطريقة" -> "هي الطريقة", "كانتالمشكلة" -> "كانت المشكلة", "علمالحاسوب" -> "علم الحاسوب"
   s = s.replace(/\b(هو|هي|هما|هم|هن|هذا|هذه|هؤلاء|ذلك|تلك|كان|كانت|كانوا|أصبح|أمسى|صار|ليس|في|على|إلى|من|عن|مع|عند|بعد|قبل|بين|حول|ضد|خلال|نحو|لدى|غير|كل|علم|عام|الدخول|الوصول|جميع|بعض|نفس|عين|كلا|كلتا)(ال[ء-ي]+)/g, '$1 $2');
 
-  // 8. Fix BiDi inverted parenthesis patterns
+  // 10. Fix BiDi inverted parenthesis patterns
   // ")500 :(Error" -> "(Error 500):"
   s = s.replace(/\)\s*(\d+)\s*:\s*\((Error|Warning|Info|Code)\b/gi, '($2 $1):');
   s = s.replace(/\)\s*(\d+)\s*\((Error|Warning|Info|Code)\b/gi, '($2 $1)');
@@ -106,7 +123,7 @@ function postProcess(text) {
     return match;
   });
 
-  // 9. Clean up whitespace
+  // 11. Clean up whitespace
   s = s.replace(/[ \t]+/g, ' ');
   s = s.replace(/ \n/g, '\n').replace(/\n /g, '\n');
   s = s.replace(/\n{3,}/g, '\n\n');

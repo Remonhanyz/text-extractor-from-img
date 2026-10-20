@@ -11,73 +11,114 @@ namespace ArabicTextExtractor
         {
             if (src == null) return null;
 
+            int w = src.Width;
+            int h = src.Height;
+
             // 1. Detect if image has a dark background (common in dark themes / code editors / terminals)
             bool isDark = IsDarkBackground(src);
 
-            // 2. High-quality upscale (screen text is typically 96 DPI, ~12-14px; 2.4x brings it to ~30-36px)
-            float scale = 2.4f;
-            int padding = 26; // 26px clean white margin around borders prevents glyph edge clipping
+            // 2. Convert to grayscale array (with inversion if dark background)
+            byte[,] gray = new byte[w, h];
+            BitmapData srcData = src.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            unsafe
+            {
+                byte* ptr = (byte*)srcData.Scan0;
+                int stride = srcData.Stride;
+                for (int y = 0; y < h; y++)
+                {
+                    byte* row = ptr + y * stride;
+                    for (int x = 0; x < w; x++)
+                    {
+                        int b = row[x * 4];
+                        int g = row[x * 4 + 1];
+                        int r = row[x * 4 + 2];
+                        int lum = (int)(0.299 * r + 0.587 * g + 0.114 * b);
+                        if (isDark) lum = 255 - lum;
+                        gray[x, y] = (byte)lum;
+                    }
+                }
+            }
+            src.UnlockBits(srcData);
 
-            int targetW = (int)(src.Width * scale) + (padding * 2);
-            int targetH = (int)(src.Height * scale) + (padding * 2);
+            // 3. Fast integral image for local background estimation (Sauvola-based document cleaning)
+            // Removes page bleed-through, spine shadows, and uneven lighting on printed documents
+            int radius = Math.Max(12, Math.Min(24, Math.Min(w, h) / 25));
+            long[,] integral = new long[w + 1, h + 1];
+            for (int y = 0; y < h; y++)
+            {
+                long sum = 0;
+                for (int x = 0; x < w; x++)
+                {
+                    sum += gray[x, y];
+                    integral[x + 1, y + 1] = integral[x + 1, y] + sum;
+                }
+            }
 
-            Bitmap scaledBmp = new Bitmap(targetW, targetH, PixelFormat.Format32bppArgb);
-            using (Graphics g = Graphics.FromImage(scaledBmp))
+            // 4. Adaptive binarization to temp bitmap
+            Bitmap tempBmp = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            BitmapData dstData = tempBmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppArgb);
+
+            unsafe
+            {
+                byte* ptr = (byte*)dstData.Scan0;
+                int stride = dstData.Stride;
+
+                for (int y = 0; y < h; y++)
+                {
+                    byte* row = ptr + y * stride;
+                    int y1 = Math.Max(0, y - radius);
+                    int y2 = Math.Min(h - 1, y + radius);
+
+                    for (int x = 0; x < w; x++)
+                    {
+                        int x1 = Math.Max(0, x - radius);
+                        int x2 = Math.Min(w - 1, x + radius);
+
+                        int count = (x2 - x1 + 1) * (y2 - y1 + 1);
+                        long sum = integral[x2 + 1, y2 + 1] - integral[x1, y2 + 1] - integral[x2 + 1, y1] + integral[x1, y1];
+                        int mean = (int)(sum / count);
+
+                        int val = gray[x, y];
+                        byte outByte = 255; // White background
+
+                        // Mask out right spine dark artifact if near right edge on book scans
+                        bool isExtremeSpine = (x > w - 8);
+                        if (!isExtremeSpine && val < (mean - 15))
+                        {
+                            outByte = 0; // Black text
+                        }
+
+                        row[x * 4] = outByte;
+                        row[x * 4 + 1] = outByte;
+                        row[x * 4 + 2] = outByte;
+                        row[x * 4 + 3] = 255;
+                    }
+                }
+            }
+            tempBmp.UnlockBits(dstData);
+
+            // 5. High-quality upscale & clean margin padding (prevents character boundary clipping)
+            float scale = 1.6f;
+            if (h < 200) scale = 2.2f; // Small screen snips get higher scaling
+            int pad = 24;
+
+            int targetW = (int)(w * scale) + pad * 2;
+            int targetH = (int)(h * scale) + pad * 2;
+
+            Bitmap output = new Bitmap(targetW, targetH, PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(output))
             {
                 g.Clear(Color.White);
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.SmoothingMode = SmoothingMode.HighQuality;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-                g.CompositingQuality = CompositingQuality.HighQuality;
 
-                Rectangle destRect = new Rectangle(padding, padding, (int)(src.Width * scale), (int)(src.Height * scale));
-
-                if (isDark)
-                {
-                    // Invert RGB: Dark background becomes white, white text becomes dark
-                    ColorMatrix invertMatrix = new ColorMatrix(new float[][] {
-                        new float[] {-1, 0, 0, 0, 0},
-                        new float[] {0, -1, 0, 0, 0},
-                        new float[] {0, 0, -1, 0, 0},
-                        new float[] {0, 0, 0, 1, 0},
-                        new float[] {1, 1, 1, 0, 1}
-                    });
-                    using (ImageAttributes ia = new ImageAttributes())
-                    {
-                        ia.SetColorMatrix(invertMatrix);
-                        g.DrawImage(src, destRect, 0, 0, src.Width, src.Height, GraphicsUnit.Pixel, ia);
-                    }
-                }
-                else
-                {
-                    g.DrawImage(src, destRect, 0, 0, src.Width, src.Height, GraphicsUnit.Pixel);
-                }
+                g.DrawImage(tempBmp, new Rectangle(pad, pad, (int)(w * scale), (int)(h * scale)),
+                    0, 0, w, h, GraphicsUnit.Pixel);
             }
+            tempBmp.Dispose();
 
-            // 3. ClearType Fringe Suppression & Grayscale Conversion
-            // Eliminates subpixel chromatic fringes and sharpens Arabic dots
-            Bitmap grayBmp = new Bitmap(scaledBmp.Width, scaledBmp.Height, PixelFormat.Format32bppArgb);
-            using (Graphics gGray = Graphics.FromImage(grayBmp))
-            {
-                float c = 1.15f; // Mild contrast enhancement to emphasize tiny Arabic dots
-                float t = (1.0f - c) / 2.0f;
-                ColorMatrix grayMatrix = new ColorMatrix(new float[][] {
-                    new float[] {0.299f * c, 0.299f * c, 0.299f * c, 0, 0},
-                    new float[] {0.587f * c, 0.587f * c, 0.587f * c, 0, 0},
-                    new float[] {0.114f * c, 0.114f * c, 0.114f * c, 0, 0},
-                    new float[] {0, 0, 0, 1, 0},
-                    new float[] {t, t, t, 0, 1}
-                });
-                using (ImageAttributes ia = new ImageAttributes())
-                {
-                    ia.SetColorMatrix(grayMatrix);
-                    gGray.DrawImage(scaledBmp, new Rectangle(0, 0, grayBmp.Width, grayBmp.Height),
-                        0, 0, scaledBmp.Width, scaledBmp.Height, GraphicsUnit.Pixel, ia);
-                }
-            }
-            scaledBmp.Dispose();
-
-            return grayBmp;
+            return output;
         }
 
         private static bool IsDarkBackground(Bitmap bmp)

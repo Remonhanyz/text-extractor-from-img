@@ -11,12 +11,12 @@ namespace ArabicTextExtractor
         {
             if (src == null) return null;
 
-            // 1. Detect if image has a dark background (common in dark mode apps / editors)
+            // 1. Detect if image has a dark background (common in dark themes / code editors / terminals)
             bool isDark = IsDarkBackground(src);
 
-            // 2. High-quality upscale (screen text is typically 96 DPI, ~12-14px; 2.2x brings it to ~30-35px)
-            float scale = 2.2f;
-            int padding = 24; // 24px white margin around borders prevents glyph edge clipping
+            // 2. High-quality upscale (screen text is typically 96 DPI, ~12-14px; 2.4x brings it to ~30-36px)
+            float scale = 2.4f;
+            int padding = 26; // 26px clean white margin around borders prevents glyph edge clipping
 
             int targetW = (int)(src.Width * scale) + (padding * 2);
             int targetH = (int)(src.Height * scale) + (padding * 2);

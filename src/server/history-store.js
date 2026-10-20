@@ -14,7 +14,10 @@ function loadHistory() {
   try {
     ensureDataDir();
     if (fs.existsSync(HISTORY_FILE)) {
-      const data = fs.readFileSync(HISTORY_FILE, 'utf8');
+      let data = fs.readFileSync(HISTORY_FILE, 'utf8');
+      // Strip UTF-8 BOM if present
+      data = data.replace(/^\uFEFF/, '').trim();
+      if (!data) return [];
       return JSON.parse(data);
     }
   } catch (err) {

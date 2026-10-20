@@ -15,7 +15,7 @@ namespace ArabicTextExtractor
 
         public HotkeyConfig()
         {
-            Alt = true;
+            Ctrl = true;
             Shift = true;
             Key = Keys.A;
         }
@@ -88,10 +88,10 @@ namespace ArabicTextExtractor
 
     public class AppConfig
     {
-        public HotkeyConfig Snip = new HotkeyConfig(true, false, true, false, Keys.A); // Alt+Shift+A
-        public HotkeyConfig History = new HotkeyConfig(true, false, true, false, Keys.H); // Alt+Shift+H
+        public HotkeyConfig Snip = new HotkeyConfig(false, true, true, false, Keys.A); // Ctrl+Shift+A
+        public HotkeyConfig History = new HotkeyConfig(false, true, true, false, Keys.H); // Ctrl+Shift+H
         public string OcrEngine = "paddle"; // "paddle", "gemini", "vision", "tesseract"
-        public string OcrLanguage = "auto"; // "auto", "ara", "eng"
+        public string OcrLanguage = "auto"; // "auto", "ara", "eng", "fra", "deu", "ell"
         public string GeminiApiKey = "";
         public string CloudVisionApiKey = "";
     }
@@ -177,7 +177,8 @@ namespace ArabicTextExtractor
                     sb.AppendFormat("  \"cloudVisionApiKey\": \"{0}\"\n", EscapeJson(cfg.CloudVisionApiKey ?? ""));
                     sb.Append("}\n");
 
-                    File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
+                    // Save as pure UTF8 without BOM
+                    File.WriteAllText(FilePath, sb.ToString(), new UTF8Encoding(false));
                 }
                 catch { }
             }
@@ -191,16 +192,38 @@ namespace ArabicTextExtractor
 
         private static string ExtractField(string json, string field)
         {
-            string search = "\"" + field + "\"";
+            string search = "\"" + field + "\":";
             int idx = json.IndexOf(search);
             if (idx == -1) return "";
-            int colon = json.IndexOf(':', idx + search.Length);
-            if (colon == -1) return "";
-            int quoteStart = json.IndexOf('\"', colon + 1);
-            if (quoteStart == -1) return "";
-            int quoteEnd = json.IndexOf('\"', quoteStart + 1);
-            if (quoteEnd == -1) return "";
-            return json.Substring(quoteStart + 1, quoteEnd - quoteStart - 1);
+
+            idx += search.Length;
+            while (idx < json.Length && (json[idx] == ' ' || json[idx] == '\t' || json[idx] == '\r' || json[idx] == '\n')) idx++;
+
+            if (idx < json.Length && json[idx] == '"')
+            {
+                idx++;
+                StringBuilder sb = new StringBuilder();
+                bool esc = false;
+                for (int i = idx; i < json.Length; i++)
+                {
+                    char c = json[i];
+                    if (esc)
+                    {
+                        if (c == '"') sb.Append('"');
+                        else if (c == '\\') sb.Append('\\');
+                        else if (c == 'n') sb.Append('\n');
+                        else if (c == 'r') sb.Append('\r');
+                        else if (c == 't') sb.Append('\t');
+                        else sb.Append(c);
+                        esc = false;
+                    }
+                    else if (c == '\\') esc = true;
+                    else if (c == '"') break;
+                    else sb.Append(c);
+                }
+                return sb.ToString();
+            }
+            return "";
         }
     }
 }

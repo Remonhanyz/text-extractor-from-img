@@ -16,9 +16,21 @@ namespace ArabicTextExtractor
         [STAThread]
         public static void Main()
         {
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new SnipperContext());
+            try
+            {
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new SnipperContext());
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "startup_error.log"), ex.ToString());
+                    MessageBox.Show(ex.ToString(), "Arabic Snipper Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                catch { }
+            }
         }
     }
 
@@ -104,6 +116,13 @@ namespace ArabicTextExtractor
                 ToolTipIcon.Info);
         }
 
+        public void NotifyFallbackHotkey(string hotkey)
+        {
+            trayIcon.ShowBalloonTip(4000, "Shortcut Auto-Assigned",
+                "The previous shortcut was in use by another application. Extractor is active with [" + hotkey + "]. You can change this in Settings.",
+                ToolTipIcon.Info);
+        }
+
         public void ApplyUpdatedShortcuts()
         {
             AppConfig cfg = ConfigManager.GetConfig();
@@ -146,50 +165,46 @@ namespace ArabicTextExtractor
         {
             if (openHistoryForm != null && !openHistoryForm.IsDisposed)
             {
+                openHistoryForm.BringToFront();
                 openHistoryForm.Activate();
-                openHistoryForm.ReloadHistory();
                 return;
             }
-
             openHistoryForm = new HistoryForm(this);
             openHistoryForm.Show();
-            openHistoryForm.Activate();
         }
 
         public void OpenSettings()
         {
             if (openSettingsForm != null && !openSettingsForm.IsDisposed)
             {
+                openSettingsForm.BringToFront();
                 openSettingsForm.Activate();
                 return;
             }
-
             openSettingsForm = new SettingsForm(this);
             openSettingsForm.Show();
-            openSettingsForm.Activate();
         }
 
-        public void ProcessImage(Bitmap cropped)
+        public void ProcessImage(Bitmap rawSnippet)
+        {
+            ProcessSnippet(rawSnippet);
+        }
+
+        public void ProcessSnippet(Bitmap rawSnippet)
         {
             ThreadPool.QueueUserWorkItem(_ =>
             {
                 try
                 {
-                    EnsureNodeServiceRunning();
-
-                    // Apply high-accuracy preprocessing
-                    Bitmap enhanced = ImagePreprocessor.Preprocess(cropped);
-                    cropped.Dispose();
-
+                    using (Bitmap preprocessed = ImagePreprocessor.Preprocess(rawSnippet))
                     using (MemoryStream ms = new MemoryStream())
                     {
-                        enhanced.Save(ms, ImageFormat.Png);
+                        preprocessed.Save(ms, ImageFormat.Png);
                         byte[] imgBytes = ms.ToArray();
-                        enhanced.Dispose();
 
                         AppConfig cfg = ConfigManager.GetConfig();
-                        string lang = (cfg != null && !string.IsNullOrEmpty(cfg.OcrLanguage)) ? cfg.OcrLanguage : "auto";
                         string engine = (cfg != null && !string.IsNullOrEmpty(cfg.OcrEngine)) ? cfg.OcrEngine : "paddle";
+                        string lang = (cfg != null && !string.IsNullOrEmpty(cfg.OcrLanguage)) ? cfg.OcrLanguage : "auto";
                         string geminiKey = (cfg != null && !string.IsNullOrEmpty(cfg.GeminiApiKey)) ? cfg.GeminiApiKey : "";
                         string visionKey = (cfg != null && !string.IsNullOrEmpty(cfg.CloudVisionApiKey)) ? cfg.CloudVisionApiKey : "";
 
@@ -253,7 +268,7 @@ namespace ArabicTextExtractor
                             }
                             else
                             {
-                                trayIcon.ShowBalloonTip(2000, "No text recognized", "Could not detect Arabic or English text in the selected area.", ToolTipIcon.Warning);
+                                trayIcon.ShowBalloonTip(2000, "No text recognized", "Could not detect text in the selected area.", ToolTipIcon.Warning);
                             }
                         }
                     }

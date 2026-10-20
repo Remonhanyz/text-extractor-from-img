@@ -44,7 +44,7 @@
   <header>
     <h1>🔍 Screen Text Extractor</h1>
     <div class="search-box">
-      <input type="text" id="searchInput" placeholder="Search Arabic & English snippets...">
+      <input type="text" id="searchInput" placeholder="Search extracted snippets...">
     </div>
     <div class="actions">
       <button class="btn" onclick="openSettingsModal()">⚙ Settings</button>
@@ -73,8 +73,8 @@
       <div class="form-group">
         <label for="cfgEngine">OCR Recognition Engine</label>
         <select id="cfgEngine" onchange="toggleApiKeyField()">
-          <option value="paddle">PaddleOCR (Offline - High Arabic Accuracy) [Default]</option>
-          <option value="gemini">Gemini 1.5 Flash (Cloud - Perfect Accuracy)</option>
+          <option value="paddle">PaddleOCR (Offline - High Accuracy) [Default]</option>
+          <option value="gemini">Gemini 1.5 Flash (Cloud - 100% Accuracy)</option>
           <option value="vision">Google Cloud Vision (Cloud - Vision API)</option>
           <option value="tesseract">Tesseract (Offline - Legacy)</option>
         </select>
@@ -83,9 +83,12 @@
       <div class="form-group">
         <label for="cfgLang">Language Mode</label>
         <select id="cfgLang">
-          <option value="auto">Arabic & English (Auto)</option>
-          <option value="ara">Arabic Only</option>
-          <option value="eng">English Only</option>
+          <option value="auto">All Languages (Auto Detect)</option>
+          <option value="ara">Arabic (العربية)</option>
+          <option value="eng">English</option>
+          <option value="fra">French (Français)</option>
+          <option value="deu">German (Deutsch)</option>
+          <option value="ell">Greek (Ελληνικά)</option>
         </select>
       </div>
 

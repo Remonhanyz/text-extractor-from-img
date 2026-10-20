@@ -14,7 +14,7 @@ async function callSingleModel(base64Image, apiKey, modelName) {
         {
           parts: [
             {
-              text: "Extract all text from this image with highest precision. Preserve exact Arabic, English words, punctuation, numbers, and paragraph formatting. Return ONLY the extracted text. Do not add explanations, conversational comments, or code block delimiters (```)."
+              text: "Extract all text from this image with highest precision. Preserve exact Arabic, Greek, French, German, and English words, accented characters (é, è, ê, ë, à, â, î, ï, ô, û, ù, ç, ä, ö, ü, ß), Greek letters (α, β, γ, δ, ε, ζ, η, θ, ι, κ, λ, μ, ν, ξ, ο, π, ρ, σ, τ, υ, φ, χ, ψ, ω), punctuation, numbers, and paragraph formatting. Return ONLY the extracted text. Do not add conversational comments or code block delimiters (```)."
             },
             {
               inline_data: {
@@ -90,11 +90,9 @@ async function callGeminiApi(base64Image, apiKey) {
       return await callSingleModel(base64Image, apiKey, model);
     } catch (err) {
       lastError = err;
-      // If 404 model not found, try the next candidate model
       if (err.statusCode === 404) {
         continue;
       }
-      // For invalid keys or other client errors, don't keep retrying
       throw err;
     }
   }

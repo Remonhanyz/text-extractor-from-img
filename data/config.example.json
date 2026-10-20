@@ -1,0 +1,8 @@
+﻿{
+  " snipShortcut\: \Ctrl+Shift+A\,
+ \historyShortcut\: \Ctrl+Shift+H\,
+ \ocrEngine\: \paddle\,
+ \ocrLanguage\: \auto\,
+ \geminiApiKey\: \\,
+ \cloudVisionApiKey\: \\
+}

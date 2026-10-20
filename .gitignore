@@ -6,3 +6,5 @@ test_*.cs
 test_*.exe
 make_img.ps1
 test_ocr*.js
+data/*.json
+!data/*.example.json

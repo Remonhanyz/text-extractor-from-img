@@ -45,7 +45,7 @@ namespace ArabicTextExtractor
             trayMenu = new ContextMenuStrip();
             itemSnip = new ToolStripMenuItem(string.Format("Capture Text ({0})", cfg.Snip), null, (s, e) => StartSnipping());
             itemHistory = new ToolStripMenuItem(string.Format("Text History ({0})", cfg.History), null, (s, e) => OpenHistory());
-            itemSettings = new ToolStripMenuItem("Settings...", null, (s, e) => OpenSettings());
+            itemSettings = new ToolStripMenuItem("Settings & Engine...", null, (s, e) => OpenSettings());
 
             trayMenu.Items.Add(itemSnip);
             trayMenu.Items.Add(itemHistory);
@@ -95,53 +95,59 @@ namespace ArabicTextExtractor
 
             hotkeyWindow = new HotkeyWindow(this);
 
+            string engDisplay = (cfg.OcrEngine == "gemini") ? "Gemini 1.5 Flash" :
+                                (cfg.OcrEngine == "vision") ? "Cloud Vision" :
+                                (cfg.OcrEngine == "tesseract") ? "Tesseract" : "PaddleOCR (Offline)";
+
             trayIcon.ShowBalloonTip(3000, "Screen Text Extractor Ready",
-                string.Format("{0}: Snip screen to copy text\n{1}: Open text history", cfg.Snip, cfg.History),
+                string.Format("Engine: {0}\n{1}: Snip screen to copy text\n{2}: Open history", engDisplay, cfg.Snip, cfg.History),
                 ToolTipIcon.Info);
         }
 
         public void ApplyUpdatedShortcuts()
         {
-            hotkeyWindow.RegisterCurrentHotkeys();
             AppConfig cfg = ConfigManager.GetConfig();
+            if (hotkeyWindow != null)
+            {
+                hotkeyWindow.RegisterCurrentHotkeys();
+            }
+
             itemSnip.Text = string.Format("Capture Text ({0})", cfg.Snip);
             itemHistory.Text = string.Format("Text History ({0})", cfg.History);
             trayIcon.Text = string.Format("Text Extractor ({0})", cfg.Snip);
 
-            trayIcon.ShowBalloonTip(2500, "Settings Updated",
-                string.Format("Snip: {0}\nHistory: {1}\nMode: {2}", cfg.Snip, cfg.History, cfg.OcrLanguage ?? "auto"),
+            string engDisplay = (cfg.OcrEngine == "gemini") ? "Gemini 1.5 Flash" :
+                                (cfg.OcrEngine == "vision") ? "Cloud Vision" :
+                                (cfg.OcrEngine == "tesseract") ? "Tesseract" : "PaddleOCR (Offline)";
+
+            trayIcon.ShowBalloonTip(2000, "Settings Applied",
+                string.Format("Engine: {0}\nLanguage: {1}\nSnip: {2} | History: {3}", engDisplay, cfg.OcrLanguage, cfg.Snip, cfg.History),
                 ToolTipIcon.Info);
         }
 
         public void StartSnipping()
         {
-            try
-            {
-                Rectangle bounds = SystemInformation.VirtualScreen;
+            Thread.Sleep(120);
 
-                Bitmap fullScreenshot = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb);
-                using (Graphics g = Graphics.FromImage(fullScreenshot))
-                {
-                    g.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);
-                }
+            Rectangle bounds = SystemInformation.VirtualScreen;
+            Bitmap screenBmp = new Bitmap(bounds.Width, bounds.Height);
 
-                OverlayForm overlay = new OverlayForm(fullScreenshot, bounds, this);
-                overlay.Show();
-                overlay.Activate();
-            }
-            catch (Exception ex)
+            using (Graphics g = Graphics.FromImage(screenBmp))
             {
-                MessageBox.Show("Error initiating snipping tool: " + ex.Message, "Capture Error",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                g.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size);
             }
+
+            OverlayForm overlay = new OverlayForm(screenBmp, bounds, this);
+            overlay.Show();
+            overlay.Activate();
         }
 
         public void OpenHistory()
         {
             if (openHistoryForm != null && !openHistoryForm.IsDisposed)
             {
-                openHistoryForm.BringToFront();
                 openHistoryForm.Activate();
+                openHistoryForm.ReloadHistory();
                 return;
             }
 
@@ -154,7 +160,6 @@ namespace ArabicTextExtractor
         {
             if (openSettingsForm != null && !openSettingsForm.IsDisposed)
             {
-                openSettingsForm.BringToFront();
                 openSettingsForm.Activate();
                 return;
             }
@@ -184,14 +189,21 @@ namespace ArabicTextExtractor
 
                         AppConfig cfg = ConfigManager.GetConfig();
                         string lang = (cfg != null && !string.IsNullOrEmpty(cfg.OcrLanguage)) ? cfg.OcrLanguage : "auto";
+                        string engine = (cfg != null && !string.IsNullOrEmpty(cfg.OcrEngine)) ? cfg.OcrEngine : "paddle";
+                        string geminiKey = (cfg != null && !string.IsNullOrEmpty(cfg.GeminiApiKey)) ? cfg.GeminiApiKey : "";
+                        string visionKey = (cfg != null && !string.IsNullOrEmpty(cfg.CloudVisionApiKey)) ? cfg.CloudVisionApiKey : "";
 
-                        string url = "http://127.0.0.1:" + OCR_PORT + "/ocr?lang=" + Uri.EscapeDataString(lang);
+                        string url = "http://127.0.0.1:" + OCR_PORT + "/ocr?lang=" + Uri.EscapeDataString(lang) + "&engine=" + Uri.EscapeDataString(engine);
                         HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
                         request.Method = "POST";
                         request.ContentType = "image/png";
                         request.Headers["X-OCR-Lang"] = lang;
+                        request.Headers["X-OCR-Engine"] = engine;
+                        if (!string.IsNullOrEmpty(geminiKey)) request.Headers["X-Gemini-Key"] = geminiKey;
+                        if (!string.IsNullOrEmpty(visionKey)) request.Headers["X-Vision-Key"] = visionKey;
+
                         request.ContentLength = imgBytes.Length;
-                        request.Timeout = 20000;
+                        request.Timeout = 28000;
 
                         using (Stream reqStream = request.GetRequestStream())
                         {
@@ -203,6 +215,9 @@ namespace ArabicTextExtractor
                         {
                             string json = reader.ReadToEnd();
                             string text = ExtractJsonStringField(json, "text");
+                            string usedEngine = ExtractJsonStringField(json, "engine");
+                            string fallbackFrom = ExtractJsonStringField(json, "fallbackFrom");
+
                             if (!string.IsNullOrEmpty(text))
                             {
                                 HistoryManager.Add(text);
@@ -226,8 +241,14 @@ namespace ArabicTextExtractor
 
                                 try { SystemSounds.Asterisk.Play(); } catch { }
 
+                                string engineTitle = !string.IsNullOrEmpty(usedEngine) ? usedEngine.ToUpper() : "OCR";
+                                if (!string.IsNullOrEmpty(fallbackFrom))
+                                {
+                                    engineTitle += " (Fallback from " + fallbackFrom + ")";
+                                }
+
                                 string preview = text.Length > 80 ? text.Substring(0, 80) + "..." : text;
-                                trayIcon.ShowBalloonTip(2500, "Text Extracted & Copied (" + text.Length + " chars)",
+                                trayIcon.ShowBalloonTip(2500, "[" + engineTitle + "] Text Copied (" + text.Length + " chars)",
                                     preview, ToolTipIcon.Info);
                             }
                             else
@@ -239,7 +260,7 @@ namespace ArabicTextExtractor
                 }
                 catch (Exception ex)
                 {
-                    trayIcon.ShowBalloonTip(3000, "OCR Service Error", ex.Message, ToolTipIcon.Error);
+                    trayIcon.ShowBalloonTip(3500, "OCR Error", ex.Message, ToolTipIcon.Error);
                 }
             });
         }

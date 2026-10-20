@@ -90,7 +90,10 @@ namespace ArabicTextExtractor
     {
         public HotkeyConfig Snip = new HotkeyConfig(true, false, true, false, Keys.A); // Alt+Shift+A
         public HotkeyConfig History = new HotkeyConfig(true, false, true, false, Keys.H); // Alt+Shift+H
+        public string OcrEngine = "paddle"; // "paddle", "gemini", "vision", "tesseract"
         public string OcrLanguage = "auto"; // "auto", "ara", "eng"
+        public string GeminiApiKey = "";
+        public string CloudVisionApiKey = "";
     }
 
     public static class ConfigManager
@@ -138,20 +141,17 @@ namespace ArabicTextExtractor
                 string json = File.ReadAllText(FilePath, Encoding.UTF8);
                 string snipStr = ExtractField(json, "snipShortcut");
                 string histStr = ExtractField(json, "historyShortcut");
+                string engStr = ExtractField(json, "ocrEngine");
                 string langStr = ExtractField(json, "ocrLanguage");
+                string geminiStr = ExtractField(json, "geminiApiKey");
+                string visionStr = ExtractField(json, "cloudVisionApiKey");
 
-                if (!string.IsNullOrEmpty(snipStr))
-                {
-                    cfg.Snip = HotkeyConfig.Parse(snipStr, cfg.Snip);
-                }
-                if (!string.IsNullOrEmpty(histStr))
-                {
-                    cfg.History = HotkeyConfig.Parse(histStr, cfg.History);
-                }
-                if (!string.IsNullOrEmpty(langStr))
-                {
-                    cfg.OcrLanguage = langStr;
-                }
+                if (!string.IsNullOrEmpty(snipStr)) cfg.Snip = HotkeyConfig.Parse(snipStr, cfg.Snip);
+                if (!string.IsNullOrEmpty(histStr)) cfg.History = HotkeyConfig.Parse(histStr, cfg.History);
+                if (!string.IsNullOrEmpty(engStr)) cfg.OcrEngine = engStr;
+                if (!string.IsNullOrEmpty(langStr)) cfg.OcrLanguage = langStr;
+                if (!string.IsNullOrEmpty(geminiStr)) cfg.GeminiApiKey = geminiStr;
+                if (!string.IsNullOrEmpty(visionStr)) cfg.CloudVisionApiKey = visionStr;
             }
             catch { }
             return cfg;
@@ -171,13 +171,22 @@ namespace ArabicTextExtractor
                     sb.Append("{\n");
                     sb.AppendFormat("  \"snipShortcut\": \"{0}\",\n", cfg.Snip.ToString());
                     sb.AppendFormat("  \"historyShortcut\": \"{0}\",\n", cfg.History.ToString());
-                    sb.AppendFormat("  \"ocrLanguage\": \"{0}\"\n", cfg.OcrLanguage ?? "auto");
+                    sb.AppendFormat("  \"ocrEngine\": \"{0}\",\n", EscapeJson(cfg.OcrEngine ?? "paddle"));
+                    sb.AppendFormat("  \"ocrLanguage\": \"{0}\",\n", EscapeJson(cfg.OcrLanguage ?? "auto"));
+                    sb.AppendFormat("  \"geminiApiKey\": \"{0}\",\n", EscapeJson(cfg.GeminiApiKey ?? ""));
+                    sb.AppendFormat("  \"cloudVisionApiKey\": \"{0}\"\n", EscapeJson(cfg.CloudVisionApiKey ?? ""));
                     sb.Append("}\n");
 
                     File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
                 }
                 catch { }
             }
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "").Replace("\n", "");
         }
 
         private static string ExtractField(string json, string field)

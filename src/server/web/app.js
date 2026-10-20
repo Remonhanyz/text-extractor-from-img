@@ -81,5 +81,62 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2000);
 }
 
+// Settings Modal
+async function openSettingsModal() {
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    document.getElementById('cfgEngine').value = cfg.ocrEngine || 'paddle';
+    document.getElementById('cfgLang').value = cfg.ocrLanguage || 'auto';
+    document.getElementById('cfgApiKey').value = cfg.geminiApiKey || cfg.cloudVisionApiKey || '';
+    toggleApiKeyField();
+    document.getElementById('settingsModal').classList.add('open');
+  } catch (e) {
+    console.error('Failed to load settings:', e);
+  }
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+
+function toggleApiKeyField() {
+  const eng = document.getElementById('cfgEngine').value;
+  const grp = document.getElementById('grpApiKey');
+  grp.style.display = (eng === 'gemini' || eng === 'vision') ? 'block' : 'none';
+}
+
+async function saveSettings() {
+  const engine = document.getElementById('cfgEngine').value;
+  const lang = document.getElementById('cfgLang').value;
+  const apiKey = document.getElementById('cfgApiKey').value.trim();
+
+  const payload = {
+    ocrEngine: engine,
+    ocrLanguage: lang
+  };
+  if (engine === 'gemini') {
+    payload.geminiApiKey = apiKey;
+  } else if (engine === 'vision') {
+    payload.cloudVisionApiKey = apiKey;
+  }
+
+  try {
+    const res = await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      showToast('Settings saved & applied!');
+      closeSettingsModal();
+    } else {
+      alert('Failed to save settings.');
+    }
+  } catch (e) {
+    alert('Error saving settings: ' + e.message);
+  }
+}
+
 document.getElementById('searchInput').addEventListener('input', renderList);
 fetchHistory();

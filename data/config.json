@@ -1,4 +1,8 @@
 {
   "snipShortcut": "Alt+Shift+A",
-  "historyShortcut": "Alt+Shift+H"
+  "historyShortcut": "Alt+Shift+H",
+  "ocrEngine": "paddle",
+  "ocrLanguage": "auto",
+  "geminiApiKey": "",
+  "cloudVisionApiKey": ""
 }

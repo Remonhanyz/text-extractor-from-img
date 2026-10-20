@@ -6,12 +6,29 @@ const historyStore = require('./history-store');
 
 const PORT = process.env.PORT || 48821;
 const WEB_DIR = path.join(__dirname, 'web');
+const CONFIG_PATH = path.resolve(__dirname, '../../data/config.json');
+
+function saveConfig(updated) {
+  let existing = {};
+  try {
+    if (fs.existsSync(CONFIG_PATH)) {
+      const raw = fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, '');
+      existing = JSON.parse(raw);
+    }
+  } catch {}
+
+  const merged = { ...existing, ...updated };
+  const dir = path.dirname(CONFIG_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
+  return merged;
+}
 
 const server = http.createServer(async (req, res) => {
   // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OCR-Lang');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-OCR-Lang, X-OCR-Engine, X-Gemini-Key, X-Vision-Key');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -24,6 +41,32 @@ const server = http.createServer(async (req, res) => {
     const status = ocrWorker.getStatus();
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify(status));
+    return;
+  }
+
+  // Config API - Get
+  if (req.url === '/api/config' && req.method === 'GET') {
+    const cfg = ocrWorker.loadConfig();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(JSON.stringify(cfg));
+    return;
+  }
+
+  // Config API - Update
+  if (req.url === '/api/config' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        const updated = saveConfig(payload);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: true, config: updated }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
     return;
   }
 
@@ -78,7 +121,10 @@ const server = http.createServer(async (req, res) => {
   // OCR Endpoint
   if (req.url.startsWith('/ocr') && req.method === 'POST') {
     const parsedUrl = new URL(req.url, 'http://127.0.0.1:' + PORT);
-    const lang = parsedUrl.searchParams.get('lang') || req.headers['x-ocr-lang'] || 'auto';
+    const lang = parsedUrl.searchParams.get('lang') || req.headers['x-ocr-lang'] || '';
+    const engine = parsedUrl.searchParams.get('engine') || req.headers['x-ocr-engine'] || '';
+    const geminiKey = req.headers['x-gemini-key'] || '';
+    const visionKey = req.headers['x-vision-key'] || '';
 
     const chunks = [];
     req.on('data', chunk => chunks.push(chunk));
@@ -91,7 +137,12 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        const result = await ocrWorker.recognize(imageBuffer, lang);
+        const result = await ocrWorker.recognize(imageBuffer, {
+          engine,
+          lang,
+          geminiApiKey: geminiKey,
+          cloudVisionApiKey: visionKey
+        });
 
         // Auto-save non-empty extractions to history
         if (result.text && result.text.length > 0) {
@@ -99,14 +150,17 @@ const server = http.createServer(async (req, res) => {
         }
 
         const preview = result.text.length > 60 ? result.text.substring(0, 60) + '...' : result.text;
-        console.log('[OCR-Server] Recognized [' + lang + '] (' + result.durationMs + 'ms, Conf: ' + result.confidence + '%): "' + preview.replace(/\n/g, ' ') + '"');
+        console.log(`[OCR-Server] [${result.engine}] Recognized (${result.durationMs}ms, Conf: ${result.confidence}%): "${preview.replace(/\n/g, ' ')}"`);
 
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
           success: true,
           text: result.text,
           confidence: result.confidence,
-          durationMs: result.durationMs
+          durationMs: result.durationMs,
+          engine: result.engine,
+          fallbackFrom: result.fallbackFrom,
+          fallbackReason: result.fallbackReason
         }));
       } catch (err) {
         console.error('[OCR-Server] Error processing image:', err.message);
@@ -125,7 +179,7 @@ const server = http.createServer(async (req, res) => {
 ocrWorker.initWorker().then(() => {
   server.listen(PORT, '127.0.0.1', () => {
     console.log('[OCR-Server] Server running on http://127.0.0.1:' + PORT);
-    console.log('[OCR-Server] History Web Dashboard: http://127.0.0.1:' + PORT + '/history');
+    console.log('[OCR-Server] History & Settings Dashboard: http://127.0.0.1:' + PORT + '/history');
   });
 }).catch(err => {
   console.error('[OCR-Server] Failed to initialize worker:', err);

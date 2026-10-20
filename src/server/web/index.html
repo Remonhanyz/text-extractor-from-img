@@ -3,8 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Screen OCR Extractor - Text History</title>
+  <title>Screen OCR Extractor - Text History & Settings</title>
   <link rel="stylesheet" href="/style.css">
+  <style>
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.6);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #ffffff;
+      border-radius: 12px;
+      width: 480px;
+      max-width: 90vw;
+      padding: 24px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    }
+    .modal h2 { margin-top: 0; font-size: 1.25rem; color: #0f172a; margin-bottom: 16px; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: 600; font-size: 0.875rem; margin-bottom: 6px; color: #334155; }
+    .form-group select, .form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+    }
+    .form-group small { display: block; margin-top: 4px; color: #64748b; font-size: 0.8rem; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  </style>
 </head>
 <body>
   <header>
@@ -13,6 +47,7 @@
       <input type="text" id="searchInput" placeholder="Search Arabic & English snippets...">
     </div>
     <div class="actions">
+      <button class="btn" onclick="openSettingsModal()">⚙ Settings</button>
       <button class="btn" onclick="fetchHistory()">↻ Refresh</button>
       <button class="btn btn-danger" onclick="clearHistory()">Clear All</button>
     </div>
@@ -30,6 +65,43 @@
       <textarea id="detailText" class="detail-text" placeholder="Snippet content will appear here..."></textarea>
     </div>
   </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-overlay">
+    <div class="modal">
+      <h2>⚙ OCR Engine & Settings</h2>
+      <div class="form-group">
+        <label for="cfgEngine">OCR Recognition Engine</label>
+        <select id="cfgEngine" onchange="toggleApiKeyField()">
+          <option value="paddle">PaddleOCR (Offline - High Arabic Accuracy) [Default]</option>
+          <option value="gemini">Gemini 1.5 Flash (Cloud - Perfect Accuracy)</option>
+          <option value="vision">Google Cloud Vision (Cloud - Vision API)</option>
+          <option value="tesseract">Tesseract (Offline - Legacy)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="cfgLang">Language Mode</label>
+        <select id="cfgLang">
+          <option value="auto">Arabic & English (Auto)</option>
+          <option value="ara">Arabic Only</option>
+          <option value="eng">English Only</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="grpApiKey">
+        <label for="cfgApiKey">Google Gemini / Cloud Vision API Key</label>
+        <input type="password" id="cfgApiKey" placeholder="AIzaSy...">
+        <small>Get a free Gemini API key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a>.</small>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn" onclick="closeSettingsModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveSettings()">Save & Apply</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast">Copied to clipboard!</div>
 
   <script src="/app.js"></script>

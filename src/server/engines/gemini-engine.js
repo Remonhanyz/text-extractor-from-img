@@ -1,6 +1,13 @@
 const https = require('https');
 
-async function callGeminiApi(base64Image, apiKey) {
+const CANDIDATE_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-flash-latest',
+  'gemini-2.0-flash',
+  'gemini-1.5-pro'
+];
+
+async function callSingleModel(base64Image, apiKey, modelName) {
   return new Promise((resolve, reject) => {
     const postData = JSON.stringify({
       contents: [
@@ -27,7 +34,7 @@ async function callGeminiApi(base64Image, apiKey) {
     const options = {
       hostname: 'generativelanguage.googleapis.com',
       port: 443,
-      path: `/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`,
+      path: `/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`,
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,9 +59,13 @@ async function callGeminiApi(base64Image, apiKey) {
           try {
             const parsed = JSON.parse(data);
             const msg = parsed.error?.message || data;
-            reject(new Error(`Gemini API error (${res.statusCode}): ${msg}`));
+            const err = new Error(`Gemini API error (${res.statusCode}): ${msg}`);
+            err.statusCode = res.statusCode;
+            reject(err);
           } catch {
-            reject(new Error(`Gemini API error (${res.statusCode}): ${data}`));
+            const err = new Error(`Gemini API error (${res.statusCode}): ${data}`);
+            err.statusCode = res.statusCode;
+            reject(err);
           }
         }
       });
@@ -69,6 +80,26 @@ async function callGeminiApi(base64Image, apiKey) {
     req.write(postData);
     req.end();
   });
+}
+
+async function callGeminiApi(base64Image, apiKey) {
+  let lastError = null;
+
+  for (const model of CANDIDATE_MODELS) {
+    try {
+      return await callSingleModel(base64Image, apiKey, model);
+    } catch (err) {
+      lastError = err;
+      // If 404 model not found, try the next candidate model
+      if (err.statusCode === 404) {
+        continue;
+      }
+      // For invalid keys or other client errors, don't keep retrying
+      throw err;
+    }
+  }
+
+  throw lastError || new Error('All Gemini model endpoints failed');
 }
 
 async function recognize(imageBuffer, apiKey) {

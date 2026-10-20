@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const ocrWorker = require('./ocr-worker');
@@ -65,6 +66,62 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  // Test Gemini API Key
+  if (req.url === '/api/test-key' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const { apiKey } = JSON.parse(body);
+        if (!apiKey || !apiKey.trim()) {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ valid: false, error: 'API key is empty' }));
+          return;
+        }
+
+        const testReq = https.request({
+          hostname: 'generativelanguage.googleapis.com',
+          port: 443,
+          path: `/v1beta/models?key=${encodeURIComponent(apiKey.trim())}`,
+          method: 'GET',
+          timeout: 10000
+        }, (testRes) => {
+          let testData = '';
+          testRes.on('data', c => testData += c);
+          testRes.on('end', () => {
+            if (testRes.statusCode >= 200 && testRes.statusCode < 300) {
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ valid: true, message: 'Google AI Studio key is valid!' }));
+            } else {
+              let errMsg = 'Invalid API key';
+              try {
+                const parsed = JSON.parse(testData);
+                errMsg = parsed.error?.message || errMsg;
+              } catch {}
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ valid: false, error: errMsg }));
+            }
+          });
+        });
+
+        testReq.on('error', (err) => {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ valid: false, error: 'Network error: ' + err.message }));
+        });
+        testReq.on('timeout', () => {
+          testReq.destroy();
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+          res.end(JSON.stringify({ valid: false, error: 'Request timed out (10s)' }));
+        });
+        testReq.end();
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ valid: false, error: err.message }));
       }
     });
     return;
